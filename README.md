@@ -1,5 +1,7 @@
 # Temporal Context Memory Transformer with Spatial Feature Enhancement for Video Anomaly Detection
 
+The repository is currentely under build. Full version will be released soon.
+
 # Data availability:
 
 The CUHK Avenue dataset is available at https://www.cse.cuhk.edu.hk/leojia/projects/detectabnormal/dataset.html.
