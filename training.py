@@ -79,7 +79,7 @@ transform = transforms.Compose([
 # --------------------------------------------------
 
 train_dataset = UCSDEPed2(
-    root_dir=r"C:\Users\USER\Desktop\Results MGTT\eidetic_vad-main_Avnue\data\UCSD_train\Train",
+    root_dir="UCSD\train",
     seq_len=3,
     transform=transform
 )
@@ -92,7 +92,7 @@ anomaly_ranges_dict = {
 }
 
 val_dataset = UCSDEPed2val(
-    root_dir=r"C:\Users\USER\Desktop\Results MGTT\eidetic_vad-main_Avnue\data\UCSD_val",
+    root_dir="UCSD\Val",
     seq_len=3,
     transform=transform,
     anomaly_ranges_dict=anomaly_ranges_dict,
