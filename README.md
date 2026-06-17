@@ -18,8 +18,8 @@ http://www.svcl.ucsd.edu/projects/anomaly/dataset.htm
     scikit-learn
     matplotlib
     tqdm
-
+# Dataset
     datasets/
     └── Dataset_Name/
-        ├── images/
-        └── masks/
+        ├── train/
+        └── val/
