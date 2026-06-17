@@ -20,6 +20,15 @@ from datasets.ucsd_ped2 import UCSDEPed2, UCSDEPed2val
 
 config = Config()
 
+model = RHCNetAutoencoder(seq_len=3).to(device)
+    
+criterion = CombinedPredictionLoss(
+    lambda_mse=0.5,
+    lambda_ssim=0.15,
+    lambda_temp=0.20,
+    lambda_grad=0.15
+ )
+
 optimizer = optim.Adam(
     model.parameters(),
     lr=1e-4,
