@@ -20,6 +20,6 @@ http://www.svcl.ucsd.edu/projects/anomaly/dataset.htm
     tqdm
 # Dataset
     datasets/
-    └── Dataset_Name/
+    └── Dataset/
         ├── train/
         └── val/
