@@ -1,33 +1,6 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sun Apr  5 15:29:05 2026
-
-@author: USER
-"""
-
-# -*- coding: utf-8 -*-
-"""
-Evaluation script for sequence-to-frame video anomaly detection model.
-
-Saves:
-    - input frame
-    - target frame
-    - predicted frame
-    - error map
-    - heatmap overlay
-    - anomaly score plot
-
-Optional:
-    - AUC
-    - EER
-"""
-# -*- coding: utf-8 -*-
-"""
-Evaluation script for sequence-to-frame video anomaly detection model.
-Compatible with models expecting 3-channel input even on grayscale datasets like UCSD.
-"""
 
 import os
+import random
 import cv2
 import numpy as np
 import torch
@@ -36,36 +9,45 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import roc_auc_score, roc_curve
 
-#from models.emu_autoencoder import RHCNetAutoencoder
+from configs.config import Config
 from models.autoencoder_skip import RHCNetAutoencoder
 
-# =========================================================
-# CONFIG
-# =========================================================
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-SEQ_LEN = 3
-IMG_SIZE = 224
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+config = Config()
+config.create_dirs()
+set_seed(config.seed)
+
+DEVICE = torch.device(config.device if torch.cuda.is_available() else "cpu")
+
+SEQ_LEN = config.seq_len
+IMG_SIZE = config.image_size[0]
 BATCH_SIZE = 1
 
-# UCSD is grayscale, but current model expects 3 channels
 GRAYSCALE_DATASET = True
 
-TEST_VIDEO_DIR = r"C:\Users\USER\Desktop\Results MGTT\eidetic_vad-main_Avnue\data\UCSD_test\Test\Test004"
-CHECKPOINT_PATH = r"C:\Users\USER\Desktop\DraftMGTT\Code\checkpoints_UCSD\best_model.pth"
-RESULTS_DIR = r"results_eval_UCSD"
+TEST_VIDEO_DIR = os.path.join(config.test_root, "Test004")
+CHECKPOINT_PATH = config.best_model_path
+RESULTS_DIR = os.path.join(config.results_dir, "Test004")
 
 USE_GROUND_TRUTH = True
-GROUND_TRUTH_ONE_BASED = True
+GROUND_TRUTH_ONE_BASED = config.one_based_labels
 ANOMALY_RANGES = [(29, 180)]
 
 
-
-# =========================================================
-# DATASET
-# =========================================================
 class VideoSequenceDataset(Dataset):
-    def __init__(self, root_dir, seq_len=3, img_size=IMG_SIZE, grayscale_dataset=True):
+    def __init__(self, root_dir, seq_len=3, img_size=224, grayscale_dataset=True):
         self.root_dir = root_dir
         self.seq_len = seq_len
         self.img_size = img_size
@@ -90,23 +72,24 @@ class VideoSequenceDataset(Dataset):
     def _read_frame(self, path):
         if self.grayscale_dataset:
             img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+
             if img is None:
                 raise ValueError(f"Failed to read image: {path}")
 
             img = cv2.resize(img, (self.img_size, self.img_size))
             img = img.astype(np.float32) / 255.0
+            img = np.stack([img, img, img], axis=0)
 
-            # Expand grayscale to 3 channels to match model input
-            img = np.stack([img, img, img], axis=0)  # (3, H, W)
         else:
             img = cv2.imread(path, cv2.IMREAD_COLOR)
+
             if img is None:
                 raise ValueError(f"Failed to read image: {path}")
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             img = cv2.resize(img, (self.img_size, self.img_size))
             img = img.astype(np.float32) / 255.0
-            img = np.transpose(img, (2, 0, 1))  # (3, H, W)
+            img = np.transpose(img, (2, 0, 1))
 
         return img
 
@@ -116,25 +99,25 @@ class VideoSequenceDataset(Dataset):
         for i in range(self.seq_len):
             seq.append(self._read_frame(self.frames[idx + i]))
 
-        seq = np.stack(seq, axis=0)  # (T, 3, H, W)
-        target = self._read_frame(self.frames[idx + self.seq_len])  # (3, H, W)
+        seq = np.stack(seq, axis=0)
+        target = self._read_frame(self.frames[idx + self.seq_len])
 
-        sample = {
+        return {
             "sequence": torch.tensor(seq, dtype=torch.float32),
             "target": torch.tensor(target, dtype=torch.float32),
             "target_path": self.frames[idx + self.seq_len],
             "target_index": idx + self.seq_len
         }
-        return sample
 
 
 # =========================================================
 # METRICS
 # =========================================================
 def compute_psnr(pred, target, eps=1e-8):
-    mse = torch.mean((pred - target) ** 2, dim=(1,2,3))
+    mse = torch.mean((pred - target) ** 2, dim=(1, 2, 3))
     psnr = 10 * torch.log10(1.0 / (mse + eps))
     return psnr
+
 
 def build_frame_labels(num_frames, anomaly_ranges, one_based=True):
     labels = np.zeros(num_frames, dtype=np.int32)
@@ -167,6 +150,8 @@ def compute_auc_eer(scores, labels):
     eer_threshold = thresholds[idx]
 
     return auc, eer, eer_threshold
+
+
 # =========================================================
 # VISUALIZATION HELPERS
 # =========================================================
@@ -177,17 +162,20 @@ def to_uint8_image(x):
 
 def make_error_map(target, pred):
     err = np.abs(target - pred)
+
     if err.ndim == 3:
         err = np.mean(err, axis=2)
 
     err = err - err.min()
     err = err / (err.max() + 1e-8)
+
     return err
 
 
 def make_heatmap_overlay(base_img_u8, error_map):
     heat = (error_map * 255.0).astype(np.uint8)
     heat = np.ascontiguousarray(heat)
+
     heatmap = cv2.applyColorMap(heat, cv2.COLORMAP_JET)
 
     base_bgr = cv2.cvtColor(base_img_u8, cv2.COLOR_RGB2BGR)
@@ -218,12 +206,25 @@ def save_visualization(save_path, last_input, target, pred, err_map):
     labeled_items = []
 
     for img, txt in zip(canvas_items, labels):
-        panel = np.full((title_h + img.shape[0], img.shape[1], 3), 255, dtype=np.uint8)
-        panel[title_h:, :, :] = img
-        cv2.putText(
-            panel, txt, (10, 24),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2, cv2.LINE_AA
+        panel = np.full(
+            (title_h + img.shape[0], img.shape[1], 3),
+            255,
+            dtype=np.uint8
         )
+
+        panel[title_h:, :, :] = img
+
+        cv2.putText(
+            panel,
+            txt,
+            (10, 24),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 0, 0),
+            2,
+            cv2.LINE_AA
+        )
+
         labeled_items.append(panel)
 
     canvas = np.concatenate(labeled_items, axis=1)
@@ -235,6 +236,7 @@ def save_visualization(save_path, last_input, target, pred, err_map):
 # =========================================================
 def main():
     os.makedirs(RESULTS_DIR, exist_ok=True)
+
     vis_dir = os.path.join(RESULTS_DIR, "visualizations")
     os.makedirs(vis_dir, exist_ok=True)
 
@@ -249,39 +251,46 @@ def main():
         dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,
-        num_workers=0
+        num_workers=config.num_workers,
+        pin_memory=config.pin_memory
     )
 
-    # Model expects 3-channel input
     model = RHCNetAutoencoder(seq_len=SEQ_LEN).to(DEVICE)
-    ckpt = torch.load(CHECKPOINT_PATH, map_location=DEVICE)
-    model.load_state_dict(ckpt)
+
+    checkpoint = torch.load(CHECKPOINT_PATH, map_location=DEVICE)
+
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+    else:
+        model.load_state_dict(checkpoint)
+
     model.eval()
 
     all_scores = []
 
     with torch.no_grad():
         for i, batch in enumerate(loader):
-            seq = batch["sequence"].to(DEVICE)        # (B, T, 3, H, W)
-            target = batch["target"].to(DEVICE)       # (B, 3, H, W)
+            seq = batch["sequence"].to(DEVICE)
+            target = batch["target"].to(DEVICE)
 
-            pred = model(seq)                         # (B, 3, H, W)
+            pred = model(seq)
 
             psnr = compute_psnr(pred, target)
-            score = (-psnr).item()   # anomaly = low PSNR → high score
+            score = (-psnr).item()
             all_scores.append(score)
 
-            last_input = seq[:, -1].squeeze(0).cpu().numpy()   # (3,H,W)
-            target_np = target.squeeze(0).cpu().numpy()        # (3,H,W)
-            pred_np = pred.squeeze(0).cpu().numpy()            # (3,H,W)
+            last_input = seq[:, -1].squeeze(0).cpu().numpy()
+            target_np = target.squeeze(0).cpu().numpy()
+            pred_np = pred.squeeze(0).cpu().numpy()
 
-            last_input = np.transpose(last_input, (1, 2, 0))   # (H,W,3)
+            last_input = np.transpose(last_input, (1, 2, 0))
             target_np = np.transpose(target_np, (1, 2, 0))
             pred_np = np.transpose(pred_np, (1, 2, 0))
 
             err_map = make_error_map(target_np, pred_np)
 
             save_path = os.path.join(vis_dir, f"{i:04d}.png")
+
             save_visualization(
                 save_path=save_path,
                 last_input=last_input,
@@ -290,10 +299,14 @@ def main():
                 err_map=err_map
             )
 
-            print(f"[{i+1:04d}/{len(loader):04d}] score={score:.6f} saved={save_path}")
+            print(f"[{i + 1:04d}/{len(loader):04d}] score={score:.6f} saved={save_path}")
 
     all_scores = np.asarray(all_scores, dtype=np.float32)
-    norm_scores = (all_scores - all_scores.min()) / (all_scores.max() - all_scores.min() + 1e-8)
+
+    norm_scores = (
+        (all_scores - all_scores.min()) /
+        (all_scores.max() - all_scores.min() + 1e-8)
+    )
 
     np.save(os.path.join(RESULTS_DIR, "raw_scores.npy"), all_scores)
     np.save(os.path.join(RESULTS_DIR, "normalized_scores.npy"), norm_scores)
@@ -321,7 +334,8 @@ def main():
 
         if len(eval_labels) != len(norm_scores):
             raise ValueError(
-                f"Mismatch between labels ({len(eval_labels)}) and scores ({len(norm_scores)})."
+                f"Mismatch between labels ({len(eval_labels)}) "
+                f"and scores ({len(norm_scores)})."
             )
 
         auc, eer, eer_thr = compute_auc_eer(norm_scores, eval_labels)
