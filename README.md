@@ -19,7 +19,7 @@ http://www.svcl.ucsd.edu/projects/anomaly/dataset.htm
     matplotlib
     tqdm
 
-datasets/
-└── Dataset_Name/
-    ├── images/
-    └── masks/
+    datasets/
+    └── Dataset_Name/
+        ├── images/
+        └── masks/
