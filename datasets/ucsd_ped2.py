@@ -68,9 +68,7 @@ class UCSDEPed2(Dataset):
 
 class UCSDEPed2val(Dataset):
     """
-    Label-aware validation dataset for sequence-to-frame prediction.
-
-    Expected folder structure:
+    Folder structure:
         root_dir/
             video_01/
                 0001.jpg
@@ -88,8 +86,6 @@ class UCSDEPed2val(Dataset):
             ...
         }
 
-    By default, frame ranges are assumed 1-based and inclusive.
-    The label returned for each sample corresponds to the target frame.
     """
 
     def __init__(
@@ -182,8 +178,7 @@ class UCSDEPed2val(Dataset):
 
             frames.append(img)
 
-        frames = torch.stack(frames)  # (T, C, H, W)
-
+        frames = torch.stack(frames)  
         target = Image.open(target_path).convert("RGB")
         if self.transform is not None:
             target = self.transform(target)
