@@ -1,25 +1,21 @@
 
 import torch.nn as nn
-#from models.aerhcnet import AE_RHCNet
 from models.rhcnet import RHCBlock
 
-###############################################
-# Decoder Stage (UPDATED)
-###############################################
+
 class DecoderStage(nn.Module):
 
     def __init__(self, in_ch, out_ch, mid_ch=16):
 
         super().__init__()
 
-        # Updated RHCBlock (channel adaptive)
+     
         self.rhc = RHCBlock(
             in_channels=in_ch,
             mid_channels=mid_ch,
-            out_channels=in_ch   # keep same before upsampling
+            out_channels=in_ch   
         )
 
-        # Upsampling + channel reduction
         self.up = nn.Sequential(
             nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
 
