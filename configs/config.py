@@ -1,4 +1,5 @@
 import os
+import torch
 
 class Config:
        
@@ -13,15 +14,7 @@ class Config:
     
     resume_training = False
     
-    
-    model = RHCNetAutoencoder(seq_len=3).to(device)
-    
-    criterion = CombinedPredictionLoss(
-        lambda_mse=0.3,
-        lambda_ssim=0.20,
-        lambda_temp=0.20,
-        lambda_grad=0.3
-    )
+
     
        anomaly_ranges_dict = {
            "Test001": [(66, 180)],
