@@ -1,7 +1,28 @@
 
 
 class Config:
-    device = "cuda"
+       
+    device = torch.device(config.device if torch.cuda.is_available() else "cpu")
+    
+    save_dir = "checkpoints_UCSD"
+    os.makedirs(save_dir, exist_ok=True)
+    
+    best_model_path = os.path.join(save_dir, "best_model.pth")
+    last_model_path = os.path.join(save_dir, "last_model.pth")
+    checkpoint_path = os.path.join(save_dir, "checkpoint.pth")
+    
+    resume_training = False
+    
+    
+    model = RHCNetAutoencoder(seq_len=3).to(device)
+    
+    criterion = CombinedPredictionLoss(
+        lambda_mse=0.3,
+        lambda_ssim=0.20,
+        lambda_temp=0.20,
+        lambda_grad=0.3
+    )
+    
 
 
 
