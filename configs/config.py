@@ -23,6 +23,11 @@ class Config:
         lambda_grad=0.3
     )
     
-
+       anomaly_ranges_dict = {
+           "Test001": [(66, 180)],
+           "Test002": [(100, 180)],
+           "Test003": [(5, 146)],
+           "Test004": [(36, 180)]
+       }
 
 
