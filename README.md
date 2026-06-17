@@ -23,6 +23,7 @@ http://www.svcl.ucsd.edu/projects/anomaly/dataset.htm
     └── Dataset/
         ├── train/
         └── val/
+        └── test/
 
 
 For questions, issues, or collaborations, please open an issue or contact through.
