@@ -18,3 +18,8 @@ OpenCV
 scikit-learn
 matplotlib
 tqdm
+
+datasets/
+└── Dataset_Name/
+    ├── images/
+    └── masks/
