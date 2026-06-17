@@ -10,11 +10,11 @@ The UCSD Ped2 dataset is available at
 http://www.svcl.ucsd.edu/projects/anomaly/dataset.htm 
 
 # Requirements
-## Python >= 3.8
-## PyTorch >= 2.0
-## CUDA >= 11.7
-## NumPy
-## OpenCV
-## scikit-learn
-## matplotlib
-## tqdm
+Python >= 3.8.
+PyTorch >= 2.0.
+CUDA >= 11.7.
+NumPy
+OpenCV
+scikit-learn
+matplotlib
+tqdm
