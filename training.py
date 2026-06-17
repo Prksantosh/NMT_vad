@@ -18,7 +18,7 @@ from models.autoencoder_skip import RHCNetAutoencoder
 from losses.losses import CombinedPredictionLoss
 from datasets.ucsd_ped2 import UCSDEPed2, UCSDEPed2val
 
-
+config = Config()
 
 optimizer = optim.Adam(
     model.parameters(),
