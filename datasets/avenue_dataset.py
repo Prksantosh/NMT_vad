@@ -61,9 +61,7 @@ class Avenuedataset(Dataset):
 
 class AvenueValDataset(Dataset):
     """
-    Label-aware validation dataset for sequence-to-frame prediction.
-
-    Expected folder structure:
+Folder structure:
         root_dir/
             video_01/
                 0001.jpg
@@ -81,8 +79,6 @@ class AvenueValDataset(Dataset):
             ...
         }
 
-    By default, frame ranges are assumed 1-based and inclusive.
-    The label returned for each sample corresponds to the target frame.
     """
 
     def __init__(
