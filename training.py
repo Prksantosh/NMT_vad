@@ -48,20 +48,13 @@ transform = transforms.Compose([
 
 
 train_dataset = UCSDEPed2(
-    root_dir="UCSD\train",
+    root_dir="UCS/train",
     seq_len=3,
     transform=transform
 )
 
-anomaly_ranges_dict = {
-    "Test001": [(66, 180)],
-    "Test002": [(100, 180)],
-    "Test003": [(5, 146)],
-    "Test004": [(36, 180)]
-}
-
 val_dataset = UCSDEPed2val(
-    root_dir="UCSD\Val",
+    root_dir="UCSD/Val",
     seq_len=3,
     transform=transform,
     anomaly_ranges_dict=anomaly_ranges_dict,
