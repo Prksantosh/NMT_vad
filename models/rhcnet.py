@@ -24,9 +24,7 @@ class ChannelShuffle(nn.Module):
         return x
 
 
-# =========================================================
-# Deformable Conv Block
-# =========================================================
+
 class DeformConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel=3):
         super().__init__()
@@ -57,9 +55,7 @@ class DeformConvBlock(nn.Module):
         return x
 
 
-# =========================================================
-# RHC Block (Updated)
-# =========================================================
+
 class RHCBlock(nn.Module):
 
     def __init__(self, in_channels, mid_channels, out_channels):
