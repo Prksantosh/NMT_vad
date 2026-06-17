@@ -3,9 +3,6 @@ import torch.nn as nn
 from torchvision.ops import DeformConv2d
 
 
-###############################################
-# Channel Shuffle
-###############################################
 class ChannelShuffle(nn.Module):
     def __init__(self, groups=2):
         super().__init__()
@@ -24,9 +21,7 @@ class ChannelShuffle(nn.Module):
         return x
 
 
-###############################################
-# Deformable Convolution Block
-###############################################
+
 class DeformConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel=3):
         super().__init__()
@@ -57,24 +52,8 @@ class DeformConvBlock(nn.Module):
         return x
 
 
-###############################################
-# Updated RHC Block
-###############################################
 class RHCBlock(nn.Module):
-    """
-    Updated design:
-      Input
-      -> Regular Conv (3 -> 16)
-      -> Split into 8 + 8
-      -> Branch 1: Conv(8->16) + BN + Conv(16->32) + BN + ReLU
-      -> Branch 2: DefConv(8->16) + DefConv(16->32) + ReLU
-      -> Concat => 64 channels
-      -> Channel Shuffle
-      -> 1x1 fusion Conv (64 -> 32)
-      -> Skip fusion from regular conv output (16 -> 32)
-      -> BN + ReLU
-      -> Output 32 channels
-    """
+
     def __init__(self, in_channels=3, mid_channels=16, out_channels=32):
         super().__init__()
 
@@ -139,7 +118,7 @@ class RHCBlock(nn.Module):
         out = self.fuse(out)                     # (B,32,H,W)
 
         # Skip fusion from regular conv output
-        skip = self.skip_proj(reg_out)           # (B,32,H,W)
+        skip = self.skip_proj(reg_out)           
 
         out = out + skip
         out = self.norm(out)
@@ -148,9 +127,6 @@ class RHCBlock(nn.Module):
         return out
 
 
-###############################################
-# SE Attention Block
-###############################################
 class SEBlock(nn.Module):
     def __init__(self, in_channels, reduction=16):
         super().__init__()
@@ -175,15 +151,11 @@ class SEBlock(nn.Module):
         return x * excitation
 
 
-###############################################
-# AE-RHCNet Block (UPDATED)
-###############################################
 class AE_RHCNet(nn.Module):
 
     def __init__(self, in_channels, mid_channels=16, out_channels=32):
         super().__init__()
 
-        # Updated RHC Block
         self.rhc = RHCBlock(
             in_channels=in_channels,
             mid_channels=mid_channels,
@@ -192,8 +164,6 @@ class AE_RHCNet(nn.Module):
 
         self.se1 = SEBlock(out_channels)
         self.se2 = SEBlock(out_channels)
-
-        # Residual projection (important!)
         self.identity_proj = nn.Conv2d(
             in_channels, out_channels, kernel_size=1, bias=False
         )
@@ -212,12 +182,3 @@ class AE_RHCNet(nn.Module):
         return out
 
 
-###############################################
-# Quick test
-###############################################
-if __name__ == "__main__":
-    model = AE_RHCNet(in_channels=64, out_channels=128)
-    x = torch.randn(3, 64, 58, 58)
-    y = model(x)
-    print("Input shape :", x.shape)
-    print("Output shape:", y.shape)
