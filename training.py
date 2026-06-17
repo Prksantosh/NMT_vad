@@ -6,6 +6,8 @@ Created on Mon Apr 20 16:53:52 2026
 """
 
 import os
+import random
+import numpy as np
 import torch
 import torch.optim as optim
 import torchvision.transforms as transforms
@@ -18,32 +20,58 @@ from models.autoencoder_skip import RHCNetAutoencoder
 from losses.losses import CombinedPredictionLoss
 from datasets.ucsd_ped2 import UCSDEPed2, UCSDEPed2val
 
+
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 config = Config()
 config.create_dirs()
-save_dir = config.save_dir
-os.makedirs(save_dir, exist_ok=True)
+
+set_seed(config.seed)
 
 device = torch.device(config.device if torch.cuda.is_available() else "cpu")
 
-model = RHCNetAutoencoder(seq_len=3).to(device)
-    
+save_dir = config.save_dir
+best_model_path = config.best_model_path
+last_model_path = config.last_model_path
+checkpoint_path = config.checkpoint_path
+
+resume_training = config.resume_training
+
+anomaly_ranges_dict = config.anomaly_ranges_dict
+
+
+# --------------------------------------------------
+# Model
+# --------------------------------------------------
+model = RHCNetAutoencoder(seq_len=config.seq_len).to(device)
+
 criterion = CombinedPredictionLoss(
     lambda_mse=0.5,
     lambda_ssim=0.15,
     lambda_temp=0.20,
     lambda_grad=0.15
- )
+)
 
 optimizer = optim.Adam(
     model.parameters(),
-    lr=1e-4,
-    weight_decay=1e-5
+    lr=config.learning_rate,
+    weight_decay=config.weight_decay
 )
 
 scheduler = torch.optim.lr_scheduler.StepLR(
     optimizer,
-    step_size=20,
-    gamma=0.5
+    step_size=config.step_size,
+    gamma=config.gamma
 )
 
 
@@ -51,68 +79,75 @@ scheduler = torch.optim.lr_scheduler.StepLR(
 # Transforms
 # --------------------------------------------------
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),
+    transforms.Resize(config.image_size),
     transforms.ToTensor()
-    #transforms.Normalize(
-        #mean=[0.5, 0.5, 0.5],
-        #std=[0.5, 0.5, 0.5]
-    #)
 ])
 
 
-
+# --------------------------------------------------
+# Dataset
+# --------------------------------------------------
 train_dataset = UCSDEPed2(
-    root_dir="UCSD/train",
-    seq_len=3,
+    root_dir=config.train_root,
+    seq_len=config.seq_len,
     transform=transform
 )
 
 val_dataset = UCSDEPed2val(
-    root_dir="UCSD/Val",
-    seq_len=3,
+    root_dir=config.val_root,
+    seq_len=config.seq_len,
     transform=transform,
     anomaly_ranges_dict=anomaly_ranges_dict,
-    one_based=True
+    one_based=config.one_based_labels
 )
+
+
+# --------------------------------------------------
+# Dataloader
+# --------------------------------------------------
+generator = torch.Generator()
+generator.manual_seed(config.seed)
 
 train_loader = DataLoader(
     train_dataset,
-    batch_size=4,
-    shuffle=False,
-    num_workers=0
+    batch_size=config.batch_size,
+    shuffle=True,
+    num_workers=config.num_workers,
+    pin_memory=config.pin_memory,
+    generator=generator
 )
 
 val_loader = DataLoader(
     val_dataset,
-    batch_size = config.batch_size,
+    batch_size=config.batch_size,
     shuffle=False,
-    num_workers=0
-)
-
-val_loader = DataLoader(
-    val_dataset,
-    batch_size = config.batch_size,
-    shuffle=False,
-    num_workers=0
+    num_workers=config.num_workers,
+    pin_memory=config.pin_memory
 )
 
 
-
-
+# --------------------------------------------------
+# Resume Training
+# --------------------------------------------------
 start_epoch = 0
 best_auc = 0.0
 
 if resume_training and os.path.exists(checkpoint_path):
     checkpoint = torch.load(checkpoint_path, map_location=device)
+
     model.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+
     start_epoch = checkpoint["epoch"] + 1
     best_auc = checkpoint["best_auc"]
+
     print(f"Resumed from epoch {start_epoch} | Best AUC: {best_auc:.4f}")
 
 
-
+# --------------------------------------------------
+# Validation
+# --------------------------------------------------
 def validate(model, val_loader, device, criterion):
     model.eval()
 
@@ -126,9 +161,7 @@ def validate(model, val_loader, device, criterion):
     all_labels = []
 
     with torch.no_grad():
-        for batch in val_loader:
-            frames, target, label = batch
-
+        for frames, target, label in val_loader:
             frames = frames.to(device)
             target = target.to(device)
             label = label.to(device)
@@ -144,8 +177,8 @@ def validate(model, val_loader, device, criterion):
             total_temp += loss_dict["temp_loss"].item()
             total_grad += loss_dict["grad_loss"].item()
 
-
             score = torch.mean((pred - target) ** 2, dim=(1, 2, 3))
+
             all_scores.extend(score.detach().cpu().numpy().tolist())
             all_labels.extend(label.detach().cpu().numpy().tolist())
 
@@ -160,7 +193,9 @@ def validate(model, val_loader, device, criterion):
     return avg_loss, avg_mse, avg_ssim, avg_temp, avg_grad, auc
 
 
-
+# --------------------------------------------------
+# Training Loop
+# --------------------------------------------------
 epochs = config.epochs
 
 for epoch in range(start_epoch, epochs):
@@ -201,7 +236,6 @@ for epoch in range(start_epoch, epochs):
     avg_train_temp = total_temp / len(train_loader)
     avg_train_grad = total_grad / len(train_loader)
 
-
     val_loss, val_mse, val_ssim, val_temp, val_grad, val_auc = validate(
         model=model,
         val_loader=val_loader,
@@ -210,7 +244,7 @@ for epoch in range(start_epoch, epochs):
     )
 
     print(
-        f"Epoch [{epoch+1}/{epochs}] | "
+        f"Epoch [{epoch + 1}/{epochs}] | "
         f"Train Loss: {avg_train_loss:.4f} | "
         f"Train MSE: {avg_train_mse:.4f} | "
         f"Train SSIM: {avg_train_ssim:.4f} | "
@@ -224,9 +258,7 @@ for epoch in range(start_epoch, epochs):
         f"Val AUC: {val_auc:.4f}"
     )
 
-
     torch.save(model.state_dict(), last_model_path)
-
 
     torch.save(
         {
@@ -235,15 +267,15 @@ for epoch in range(start_epoch, epochs):
             "optimizer_state_dict": optimizer.state_dict(),
             "scheduler_state_dict": scheduler.state_dict(),
             "best_auc": best_auc,
+            "seed": config.seed,
         },
         checkpoint_path
     )
 
-
     if val_auc > best_auc:
         best_auc = val_auc
         torch.save(model.state_dict(), best_model_path)
-        print(f"✅ New best model saved at epoch {epoch+1} | Best Val AUC: {best_auc:.4f}")
+        print(f"✅ New best model saved at epoch {epoch + 1} | Best Val AUC: {best_auc:.4f}")
 
 print("Training completed.")
 print(f"Best validation AUC: {best_auc:.4f}")
