@@ -14,39 +14,11 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import roc_auc_score
 
 from configs.config import Config
-#from models.emu_autoencoder import RHCNetAutoencoder
 from models.autoencoder_skip import RHCNetAutoencoder
 from losses.losses import CombinedPredictionLoss
 from datasets.ucsd_ped2 import UCSDEPed2, UCSDEPed2val
 
 
-# --------------------------------------------------
-# Config
-# --------------------------------------------------
-config = Config()
-device = torch.device(config.device if torch.cuda.is_available() else "cpu")
-
-save_dir = "checkpoints_UCSD"
-os.makedirs(save_dir, exist_ok=True)
-
-best_model_path = os.path.join(save_dir, "best_model.pth")
-last_model_path = os.path.join(save_dir, "last_model.pth")
-checkpoint_path = os.path.join(save_dir, "checkpoint.pth")
-
-resume_training = False
-
-
-# --------------------------------------------------
-# Model
-# --------------------------------------------------
-model = RHCNetAutoencoder(seq_len=3).to(device)
-
-criterion = CombinedPredictionLoss(
-    lambda_mse=0.3,
-    lambda_ssim=0.20,
-    lambda_temp=0.20,
-    lambda_grad=0.3
-)
 
 optimizer = optim.Adam(
     model.parameters(),
@@ -74,9 +46,6 @@ transform = transforms.Compose([
 ])
 
 
-# --------------------------------------------------
-# Dataset + Dataloader
-# --------------------------------------------------
 
 train_dataset = UCSDEPed2(
     root_dir="UCSD\train",
@@ -122,9 +91,7 @@ val_loader = DataLoader(
 
 
 
-# --------------------------------------------------
-# Resume training if checkpoint exists
-# --------------------------------------------------
+
 start_epoch = 0
 best_auc = 0.0
 
@@ -138,9 +105,7 @@ if resume_training and os.path.exists(checkpoint_path):
     print(f"Resumed from epoch {start_epoch} | Best AUC: {best_auc:.4f}")
 
 
-# --------------------------------------------------
-# Validation / AUC evaluation
-# --------------------------------------------------
+
 def validate(model, val_loader, device, criterion):
     model.eval()
 
@@ -172,8 +137,7 @@ def validate(model, val_loader, device, criterion):
             total_temp += loss_dict["temp_loss"].item()
             total_grad += loss_dict["grad_loss"].item()
 
-            # anomaly score
-            # can later be upgraded to weighted score if needed
+
             score = torch.mean((pred - target) ** 2, dim=(1, 2, 3))
             all_scores.extend(score.detach().cpu().numpy().tolist())
             all_labels.extend(label.detach().cpu().numpy().tolist())
@@ -189,9 +153,7 @@ def validate(model, val_loader, device, criterion):
     return avg_loss, avg_mse, avg_ssim, avg_temp, avg_grad, auc
 
 
-# --------------------------------------------------
-# Training Loop
-# --------------------------------------------------
+
 epochs = 200
 
 for epoch in range(start_epoch, epochs):
@@ -232,7 +194,7 @@ for epoch in range(start_epoch, epochs):
     avg_train_temp = total_temp / len(train_loader)
     avg_train_grad = total_grad / len(train_loader)
 
-    # ---------------- Validation ----------------
+
     val_loss, val_mse, val_ssim, val_temp, val_grad, val_auc = validate(
         model=model,
         val_loader=val_loader,
@@ -255,10 +217,10 @@ for epoch in range(start_epoch, epochs):
         f"Val AUC: {val_auc:.4f}"
     )
 
-    # ---------------- Save last model ----------------
+
     torch.save(model.state_dict(), last_model_path)
 
-    # ---------------- Save checkpoint ----------------
+
     torch.save(
         {
             "epoch": epoch,
@@ -270,7 +232,7 @@ for epoch in range(start_epoch, epochs):
         checkpoint_path
     )
 
-    # ---------------- Save best model ----------------
+
     if val_auc > best_auc:
         best_auc = val_auc
         torch.save(model.state_dict(), best_model_path)
