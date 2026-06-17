@@ -1,6 +1,6 @@
 # Temporal Context Memory Transformer with Spatial Feature Enhancement for Video Anomaly Detection
 
-# Data availability: All data used in this work are open-source and downloadable.
+# Data availability:
 
 The CUHK Avenue dataset is available at https://www.cse.cuhk.edu.hk/leojia/projects/detectabnormal/dataset.html.
 
